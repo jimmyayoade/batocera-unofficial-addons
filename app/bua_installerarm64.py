@@ -40,6 +40,7 @@ def live_update_block():
     try:
         # Example: Setup custom_service_handler
         setup_custom_service_handler()
+        setup_bua_cli()
 
         # Ensure usercustomize.py is present (BUA Python hook for add-on generators)
         usercustomize_path = f"/userdata/system/.local/lib/python{sys.version_info.major}.{sys.version_info.minor}/site-packages/usercustomize.py"
@@ -5405,6 +5406,39 @@ def setup_custom_service_handler():
 
     except Exception as e:
         print(f"[BUA] Could not setup custom_service_handler: {e}")
+
+def setup_bua_cli():
+    """Install the bua command if missing (for BUA installs made before it existed)."""
+    CLI_FILE = "/userdata/system/add-ons/bua/bin/bua"
+    CLI_LINK = "/usr/bin/bua"
+    CLI_URL = "https://raw.githubusercontent.com/batocera-unofficial-addons/batocera-unofficial-addons/main/app/bua_cli.py"
+
+    try:
+        if not os.path.exists(CLI_FILE):
+            print("[BUA] Downloading the bua command...")
+            req = urllib.request.Request(CLI_URL, headers={"User-Agent": "BUA-Installer"})
+            with urllib.request.urlopen(req, timeout=10) as response:
+                cli_content = response.read()
+            if not cli_content.startswith(b"#!"):
+                print("[BUA] bua command download looks wrong, skipping")
+                return
+
+            # Write to a temp file first so a failed write leaves no broken command
+            os.makedirs(os.path.dirname(CLI_FILE), exist_ok=True)
+            tmp_file = CLI_FILE + ".tmp"
+            with open(tmp_file, 'wb') as f:
+                f.write(cli_content)
+            os.chmod(tmp_file, 0o755)
+            os.replace(tmp_file, CLI_FILE)
+            print("[BUA] bua command downloaded successfully")
+
+        # symlink_manager links it at boot; link it now so it works straight away
+        if not os.path.lexists(CLI_LINK):
+            os.symlink(CLI_FILE, CLI_LINK)
+            print("[BUA] bua command linked into /usr/bin")
+
+    except Exception as e:
+        print(f"[BUA] Could not set up the bua command: {e}")
 
 
 if __name__ == "__main__":
